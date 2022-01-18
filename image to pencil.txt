@@ -1,0 +1,17 @@
+import cv2
+from google.colab.patches import cv2_imshow
+
+image = cv2.imread('rp17.png')
+cv2_imshow(image)
+
+gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) 
+cv2_imshow(gray)
+
+inv_gray = 255-gray
+cv2_imshow(inv_gray)
+
+blur = cv2.GaussianBlur(inv_gray, (21, 21), 0)
+cv2_imshow(blur)
+
+pencil = cv2.divide(gray, 255-blur, scale = 256.0)
+cv2_imshow(pencil)
