@@ -1,0 +1,157 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import os
+import datetime
+import tensorflow as tf
+from tensorflow.keras.utils import plot_model
+from tensorflow.keras.optimizers import Adam, RMSprop, SGD, Adamax
+from keras import regularizers
+from keras.preprocessing import image
+from keras.preprocessing.image import ImageDataGenerator, load_img
+from keras.layers import Conv2D, Dense, BatchNormalization, Activation, Dropout, MaxPooling2D, Flatten
+from keras.callbacks import ModelCheckpoint, CSVLogger, TensorBoard, EarlyStopping, ReduceLROnPlateau
+import warnings
+warnings.filterwarnings('ignore')
+
+train_dir = 'train/'
+test_dir = 'test/'
+def count_expression(path, set_):
+    dict_ = {}
+    for face_expression in os.listdir(path):
+        dir_ = path + face_expression
+        dict_[face_expression] = len(os.listdir(dir_))
+    df = pd.DataFrame(dict_, index=[set_])
+    return df
+train_count = count_expression(train_dir, 'train')
+test_count = count_expression(test_dir, 'test')
+print(train_count)
+print(test_count)
+
+plt.figure(figsize=(20,20))
+i = 1
+for face_expression in os.listdir(train_dir):
+    img = load_img((train_dir + face_expression +'/'+ os.listdir(train_dir + face_expression)[1]))
+    plt.subplot(1,9,i)
+    plt.imshow(img)
+    plt.title(face_expression)
+    plt.axis('off')
+    i += 1
+plt.show()
+
+plt.figure(figsize=(20,20))
+i = 1
+for face_expression in os.listdir(test_dir):
+    img = load_img((test_dir + face_expression +'/'+ os.listdir(test_dir + face_expression)[1]))
+    plt.subplot(1,9,i)
+    plt.imshow(img)
+    plt.title(face_expression)
+    plt.axis('off')
+    i += 1
+plt.show()
+
+img_size = 50
+plt.figure(0, figsize=(10,10))
+index = 0
+for link in os.listdir("train/"):
+    for i in range(1,6):
+        index += 1
+        plt.subplot(7,5,index)
+        img = load_img("train/" + link + "/" +os.listdir("train/" + link)[i], target_size=(img_size, img_size))
+        plt.imshow(img)
+        plt.axis('off')
+plt.tight_layout()
+
+train_count.plot(kind='bar')
+
+img_size = 50
+plt.figure(0, figsize=(10,10))
+index = 0
+for link in os.listdir("test/"):
+    for i in range(1,6):
+        index += 1
+        plt.subplot(7,5,index)
+        img = load_img("test/" + link + "/" +os.listdir("test/" + link)[i], target_size=(img_size, img_size))
+        plt.imshow(img)   
+        plt.axis('off')
+plt.tight_layout()
+
+test_count.plot(kind='bar')
+
+train_datagen = ImageDataGenerator(rescale=1./255, zoom_range=0.3, horizontal_flip=True)
+training_set = train_datagen.flow_from_directory(train_dir, batch_size=64, target_size=(48,48), shuffle=True, color_mode='grayscale', class_mode='categorical')
+test_datagen = ImageDataGenerator(rescale=1./255, validation_split = 0.2)
+test_set = test_datagen.flow_from_directory(test_dir, batch_size=64, target_size=(48,48), shuffle=True, color_mode='grayscale', class_mode='categorical')
+
+training_set.class_indices
+
+model = tf.keras.Sequential([
+
+        tf.keras.layers.Conv2D(32,(3,3),activation = 'relu',input_shape=(48,48,1)),
+        tf.keras.layers.Conv2D(64,(3,3), padding='same', activation='relu' ),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.MaxPooling2D(2,2),
+        tf.keras.layers.Dropout(0.25),
+
+        tf.keras.layers.Conv2D(128,(5,5), padding='same', activation='relu'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.MaxPooling2D(2,2),
+        tf.keras.layers.Dropout(0.25),
+
+        tf.keras.layers.Conv2D(512,(3,3), padding='same', activation='relu',kernel_regularizer=tf.keras.regularizers.l2(0.01)),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.MaxPooling2D(2,2),
+        tf.keras.layers.Dropout(0.25),
+
+        tf.keras.layers.Conv2D(512,(3,3), padding='same', activation='relu',kernel_regularizer=tf.keras.regularizers.l2(0.01)),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.MaxPooling2D(2,2),
+        tf.keras.layers.Dropout(0.25),
+
+        tf.keras.layers.Flatten(),
+        tf.keras.layers.Dense(256, activation='relu'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.25),
+    
+        tf.keras.layers.Dense(512, activation='relu'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.25),
+        # output layer
+        tf.keras.layers.Dense(7, activation='softmax')
+    ])
+
+optimiser = tf.keras.optimizers.Adam(lr=0.0001)
+model.compile(optimizer=optimiser, loss='categorical_crossentropy', metrics=['accuracy'])
+model.summary()
+
+history = model.fit(x = training_set, epochs = 1, validation_data = test_set, batch_size=64)
+
+model.save('model_fer2013.h5')
+
+train_loss, train_acc = model.evaluate(training_set)
+test_loss, test_acc = model.evaluate(test_set)
+print("final train accuracy = {:.2f} , validation accuracy = {:.2f}".format(train_acc*100, test_acc*100))
+
+img = image.load_img("test/surprise/PrivateTest_11365666.jpg",target_size = (48,48), color_mode = "grayscale")
+img = np.array(img)
+plt.imshow(img)
+print(img.shape)
+
+label_dict = {0:'Angry',1:'Disgust',2:'Fear',3:'Happy',4:'Neutral',5:'Sad',6:'Surprise'}
+img = np.expand_dims(img,axis = 0) 
+img = img.reshape(1,48,48,1)
+result = model.predict(img)
+result = list(result[0])
+print(result)
+
+img_index = result.index(max(result))
+print(label_dict[img_index])
+plt.show()
+
+model.save_weights('model_weights.h5')
+
+from IPython.display import Audio
+song_path = 'Audios'
+song = os.path.join(song_path,emotion)
+print(f'Playing {emotion} song')
+Audio(song + '.mp3', autoplay=True)
